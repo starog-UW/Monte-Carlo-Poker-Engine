@@ -23,7 +23,7 @@ It utilizes the Monte Carlo method, running n (set to 1,000,000) randomized game
 
 1.  Compile the code using g++:
     ```bash
-    g++ main.cpp -o poker -std=c++17 -O3
+    g++ poker.cpp -o poker -std=c++17 -O3
     ```
 
 2.  Run the executable:
