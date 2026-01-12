@@ -94,73 +94,143 @@ public:
 };
 
 
-// 3. Hand evaluator
 
+// 3. Hand Evaluator (Upgraded)
 
 class HandEvaluator {
 public:
-    static std::pair<HandStrength, int> evaluate(const std::vector<Card>& holeCards, const std::vector<Card>& board) {
+    struct Evaluation {
+        HandStrength type;
+        unsigned int score; // Hand's unique point value
+    };
+
+    static Evaluation evaluate(const std::vector<Card>& holeCards, const std::vector<Card>& board) {
         std::vector<Card> allCards = holeCards;
         allCards.insert(allCards.end(), board.begin(), board.end());
 
         int rankCounts[15] = {0};
         int suitCounts[4] = {0};
 
+        // FLUSH: we need to know the ranks of included cards
+        int suitRanks[4] = {0}; 
+
         for (const auto& card : allCards) {
             rankCounts[card.rank]++;
             suitCounts[card.suit]++;
+            suitRanks[card.suit] |= (1 << card.rank); 
         }
 
-        bool flush = false;
+        // 1. Checking FLUSH and STRAIGHT FLUSH
         for (int s = 0; s < 4; s++) {
-            if (suitCounts[s] >= 5) { flush = true; break; }
-        }
+            if (suitCounts[s] >= 5) {
+                // Flush detected, checking Straight Flush
+                // looking for 5 consecutive ranks
+                for (int r = 14; r >= 6; r--) {
+                    bool isStraightFlush = true;
+                    for (int k = 0; k < 5; k++) {
+                        if ( !(suitRanks[s] & (1 << (r-k))) ) {
+                            isStraightFlush = false; 
+                            break;
+                        }
+                    }
+                    if (isStraightFlush) return {STRAIGHT_FLUSH, (unsigned int)(8000000 + r)};
+                }
+                // Special case: A-2-3-4-5
+                if ((suitRanks[s] & (1<<14)) && (suitRanks[s] & (1<<2)) && (suitRanks[s] & (1<<3)) && (suitRanks[s] & (1<<4)) && (suitRanks[s] & (1<<5))) {
+                    return {STRAIGHT_FLUSH, 8000005}; // 5 high
+                }
 
-        bool straight = false;
-        int straightHighRank = 0;
-        int consecutive = 0;
-        for (int r = 14; r >= 2; r--) {
-            if (rankCounts[r] > 0) consecutive++;
-            else consecutive = 0;
-            
-            if (consecutive >= 5) {
-                straight = true;
-                straightHighRank = r + 4;
-                break;
+                // If not Straight Flush, just Flush.
+                // Calculating kickers
+                unsigned int flushScore = 0;
+                int cardsFound = 0;
+                for (int r = 14; r >= 2; r--) {
+                    if (suitRanks[s] & (1 << r)) {
+                        flushScore = (flushScore << 4) + r; 
+                        cardsFound++;
+                        if (cardsFound == 5) break;
+                    }
+                }
+                return {FLUSH, 5000000 + flushScore};
             }
         }
-        if (!straight && rankCounts[14]>0 && rankCounts[2]>0 && rankCounts[3]>0 && rankCounts[4]>0 && rankCounts[5]>0) {
-            straight = true;
-            straightHighRank = 5;
-        }
 
-        bool fourKind = false;
-        bool threeKind = false;
+        // 2. Checking FOUR OF A KIND and FULL HOUSE
         int pairsCount = 0;
-        int highRankMatch = 0;
+        int threeRank = 0;
+        int fourRank = 0;
+        int pairRanks[3] = {0}; // up to 3 pairs in 7 cards
 
         for (int r = 14; r >= 2; r--) {
-            if (rankCounts[r] == 4) { fourKind = true; highRankMatch = r; }
-            if (rankCounts[r] == 3) { threeKind = true; if(highRankMatch==0) highRankMatch = r; }
-            if (rankCounts[r] == 2) { pairsCount++; if(highRankMatch==0) highRankMatch = r; }
+            if (rankCounts[r] == 4) fourRank = r;
+            if (rankCounts[r] == 3) {
+                if (threeRank == 0) threeRank = r;
+                else {
+                    pairRanks[pairsCount++] = r;
+                }
+            }
+            if (rankCounts[r] == 2) {
+                if(pairsCount < 3) pairRanks[pairsCount++] = r;
+            }
         }
 
-        if (straight && flush) return {STRAIGHT_FLUSH, straightHighRank};
-        if (fourKind) return {FOUR_OF_A_KIND, highRankMatch};
-        if (threeKind && pairsCount >= 1) return {FULL_HOUSE, highRankMatch}; 
-        if (flush) return {FLUSH, 0}; 
-        if (straight) return {STRAIGHT, straightHighRank};
-        if (threeKind) return {THREE_OF_A_KIND, highRankMatch};
-        if (pairsCount >= 2) return {TWO_PAIR, highRankMatch};
-        if (pairsCount == 1) return {PAIR, highRankMatch};
-        
-        for(int r=14; r>=2; r--) {
-            if(rankCounts[r] > 0) return {HIGH_CARD, r};
+        // KICKER HELPER - lambda function to retrieve kickers
+        // Returns 'count' of the highest cards which are not excluded
+        auto getKickers = [&](int count, int exclude1, int exclude2 = 0) -> unsigned int {
+            unsigned int kScore = 0;
+            int found = 0;
+            for (int r = 14; r >= 2; r--) {
+                if (r == exclude1 || r == exclude2) continue;
+                if (rankCounts[r] > 0) {
+                    for(int i=0; i<rankCounts[r] && found < count; i++) {
+                         kScore = (kScore << 4) + r;
+                         found++;
+                    }
+                }
+            }
+            return kScore;
+        };
+
+        if (fourRank > 0) {
+            // Four of a kind + 1 kicker
+            return {FOUR_OF_A_KIND, 7000000 + (unsigned int)(fourRank << 4) + getKickers(1, fourRank)};
         }
-        return {HIGH_CARD, 0};
+        if (threeRank > 0 && pairsCount > 0) {
+            // Full House 
+            return {FULL_HOUSE, 6000000 + (unsigned int)(threeRank << 4) + (unsigned int)pairRanks[0]};
+        }
+
+        // 3. Checking STRAIGHT
+        int consecutive = 0;
+        for (int r = 14; r >= 2; r--) {
+            if (rankCounts[r] > 0) consecutive++; else consecutive = 0;
+            if (consecutive >= 5) {
+                return {STRAIGHT, 4000000 + (unsigned int)(r + 4)};
+            }
+        }
+        // Special case: A-2-3-4-5
+        if (rankCounts[14] && rankCounts[2] && rankCounts[3] && rankCounts[4] && rankCounts[5]) {
+            return {STRAIGHT, 4000005};
+        }
+
+        // 4. Other Hands (Three of a kind, Two Pair, Pair, High Card)
+        if (threeRank > 0) {
+            // Three of a kind + 2 kickers
+            return {THREE_OF_A_KIND, 3000000 + (unsigned int)(threeRank << 8) + getKickers(2, threeRank)};
+        }
+        if (pairsCount >= 2) {
+            // Two Pair + 1 kicker
+            return {TWO_PAIR, 2000000 + (unsigned int)(pairRanks[0] << 8) + (unsigned int)(pairRanks[1] << 4) + getKickers(1, pairRanks[0], pairRanks[1])};
+        }
+        if (pairsCount == 1) {
+            // Pair + 3 kickers 
+            return {PAIR, 1000000 + (unsigned int)(pairRanks[0] << 12) + getKickers(3, pairRanks[0])};
+        }
+
+        // High Card + 4 kickers
+        return {HIGH_CARD, getKickers(5, 0)};
     }
 };
-
 
 // 4. Monte Carlo
 
@@ -202,18 +272,16 @@ void runMonteCarlo(Card c1, Card c2, std::vector<Card> initialBoard, int iterati
             currentBoard.insert(currentBoard.end(), newBoardCards.begin(), newBoardCards.end());
         }
 
+        // New methood of evaluation
         auto myResult = HandEvaluator::evaluate({c1, c2}, currentBoard);
         auto oppResult = HandEvaluator::evaluate(oppHand, currentBoard);
 
-        if (myResult.first > oppResult.first) {
+        // Compering the scores
+        if (myResult.score > oppResult.score) {
             wins++;
-            winStats[myResult.first]++; // How did we win?
-        } else if (myResult.first == oppResult.first) {
-            if (myResult.second > oppResult.second) {
-                wins++;
-                winStats[myResult.first]++;
-            }
-            else if (myResult.second == oppResult.second) ties++;
+            winStats[myResult.type]++; // to display stats we need a hand type (e.g. pair)
+        } else if (myResult.score == oppResult.score) {
+            ties++;
         }
     }
 
@@ -243,9 +311,7 @@ void runMonteCarlo(Card c1, Card c2, std::vector<Card> initialBoard, int iterati
         if (pct >= 0.1) {
             std::cout << std::setw(12) << std::left << handNames[i] << ": ";
             
-            // Histogram: Different scaling (e.g. 1 '#' = 0.5%)
-            // 
-            int bars = (int)(pct * 2); 
+            int bars = (int)(pct); 
             for(int b=0; b<bars; b++) std::cout << "#";
             
             std::cout << " " << std::fixed << std::setprecision(2) << pct << "%\n";
