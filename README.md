@@ -4,18 +4,19 @@ It utilizes the Monte Carlo method, running n (set to 1,000,000) randomized game
 
 ## Demo Input and Output
 
-![Output Demo](demo.png)
+![Output Demo](demo1.1.png)
 
 ## Key Features
 
 * **Equity Estimation:** Runs 1,000,000 simulations to determine win/tie percentages with high statistical confidence.
+* **Bitwise Precision:** Uses advanced bitwise logic to accurately handle complex tie-breakers (kickers) and split pots, ensuring exact game rules compliance.
 * **Game Stages:** Supports analysis for Pre-flop, Flop, Turn, and River (allows input of known board cards).
 * **Deep Statistical Analysis:** Decomposes total equity into winning hand components (e.g., how much a Flush contributes to the total win rate vs. a Pair).
 * **Input Validation:** Checks for valid card inputs and prevents duplicate cards (collision detection).
 
 ## Technical Implementation
 
-* **Algorithm:** The hand evaluator uses a Frequency Array approach to check hand strength in O(N) time. This avoids sorting the cards ($O(N \log N)$), significantly improving performance.
+* **Algorithm:** The hand evaluator combines **Frequency Arrays** with **Bitwise Operations**. It maps card ranks to a single integer score using bit shifting/masking, allowing for instant comparison of hands and precise tie-breaking (kickers) without sorting ($O(N \log N)$)
 * **Performance:** Capable of processing over 1,000,000 hands per second on a single core using standard C++ optimization (`-O3`).
 * **Stack:** C++17, STL (Standard Template Library).
 
