@@ -9,7 +9,7 @@ It utilizes the Monte Carlo method, running n (set to 1,000,000) randomized game
 ## Key Features
 
 * **Equity Estimation:** Runs 1,000,000 simulations to determine win/tie percentages with high statistical confidence.
-* **Bitwise Precision:** Uses advanced bitwise logic to accurately handle complex tie-breakers (kickers) and split pots, ensuring exact game rules compliance.
+* **Bitwise Precision:** Uses bitwise logic to accurately handle complex tie-breakers (kickers) and split pots, ensuring exact game rules compliance.
 * **Game Stages:** Supports analysis for Pre-flop, Flop, Turn, and River (allows input of known board cards).
 * **Deep Statistical Analysis:** Decomposes total equity into winning hand components (e.g., how much a Flush contributes to the total win rate vs. a Pair).
 * **Input Validation:** Checks for valid card inputs and prevents duplicate cards (collision detection).
